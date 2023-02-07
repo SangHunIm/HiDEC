@@ -11,13 +11,11 @@
 2. run script 
 
 ```
-"python src/preprocessing.py --name=EURLEX57K --raw_dir=data/datasets/EURLEX57K/dataset --save_dir=data/pregenerated  --hierarchy_file=data/datasets/EURLEX57K/EURLEX57K.json"
+python src/preprocessing.py --name=EURLEX57K --raw_dir=data/datasets/EURLEX57K/dataset --save_dir=data/pregenerated  --hierarchy_file=data/datasets/EURLEX57K/EURLEX57K.json
 ```
-
-3. download glove.6b.300d in ./data
 
 ### Training
 ```
-python src/train.py --config ./config/GRUEncoder_EURLEX57K.cfg
+python src/train.py --config ./config/HiDEC_with_BERT.cfg
 ```
 
