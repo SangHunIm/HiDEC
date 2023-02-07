@@ -8,6 +8,7 @@
 ### Data preprecossing
 
 1. download EURLEX57K dataset from https://github.com/iliaschalkidis/lmtc-eurlex57k
+2. create 'data', 'data/pregenerated', 'data/datasets/EURLEX57K' move data to directory
 2. run script 
 
 ```
