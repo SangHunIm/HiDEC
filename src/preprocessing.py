@@ -1,7 +1,16 @@
-from argparse import ArgumentParser
+"""
+HiDEC Data Preprocessing Script with Hydra Configuration
+Usage:
+    python src/preprocessing.py name=EURLEX57K raw_dir=path/to/raw save_dir=path/to/output hierarchy_file=path/to/hierarchy.json
+"""
+
 from pathlib import Path
 from tqdm import tqdm
 from collections import Counter
+from omegaconf import DictConfig
+import hydra
+from hydra.core.config_store import ConfigStore
+from config_schema import PreprocessingConfig
 import json
 import re
 
@@ -21,8 +30,15 @@ english_stopwords = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves'
                      'haven', "haven't", 'isn', "isn't", 'ma', 'mightn', "mightn't", 'mustn', "mustn't", 'needn',
                      "needn't", 'shan', "shan't", 'shouldn', "shouldn't", 'wasn', "wasn't", 'weren', "weren't", 'won',
                      "won't", 'wouldn', "wouldn't"]
-                     
+
+
+# Register the preprocessing config schema with Hydra
+cs = ConfigStore.instance()
+cs.store(name="preprocessing_config", node=PreprocessingConfig)
+
+
 def cleaning(src):
+    """Clean and normalize text."""
     string = src
     string = string.strip().strip('"')
     string = re.sub(r"[^A-Za-z0-9(),!?\.\'\`]", " ", string)
@@ -43,50 +59,56 @@ def cleaning(src):
     string = string.strip().lower()
     return string
 
+
 class Preprocessor():
+    """Base preprocessor class for dataset preprocessing."""
+
     def __init__(self, raw_dir, hie_file, save_dir) -> None:
         self.raw_dir = raw_dir
         self.save_dir = save_dir
         self.hie_file = hie_file
-        self.datasets = {"train":[], "test":[], "dev":[]}
-        self.parent_child_map = {} 
-        self.id_label_map = {"root":"root"} 
-        self.target_labels = [] 
+        self.datasets = {"train": [], "test": [], "dev": []}
+        self.parent_child_map = {}
+        self.id_label_map = {"root": "root"}
+        self.target_labels = []
         self.task = None
 
     def data_loading(self):
         pass
-        
+
     def build_hierarchy(self):
         pass
 
     def save(self):
+        """Save preprocessed datasets and hierarchy files."""
         save_dir = Path(self.save_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+
         for split, fs in self.datasets.items():
-            save_file = (save_dir/"".join([split,".jsonl"]))
+            save_file = (save_dir / "".join([split, ".jsonl"]))
             writer = save_file.open("w")
             for f in fs:
-                writer.write(json.dumps(f)+"\n")
+                writer.write(json.dumps(f) + "\n")
             writer.flush()
             writer.close()
             print(f"Save preprocessed {self.task} {split} dataset at {str(save_file)}.")
             print(f"\tTotal instance : {len(fs)}")
 
-        save_file = save_dir/"parent_child_map.txt"
+        save_file = save_dir / "parent_child_map.txt"
         writer = save_file.open("w")
         for k, v in self.parent_child_map.items():
             writer.write(f"{v}\t{k}\n")
         writer.flush()
         writer.close()
 
-        save_file = save_dir/"labels.txt"
+        save_file = save_dir / "labels.txt"
         writer = save_file.open("w")
         for k, v in self.id_label_map.items():
             writer.write(f"{k}\t{v}\n")
         writer.flush()
         writer.close()
 
-        save_file = save_dir/"target_labels.txt"
+        save_file = save_dir / "target_labels.txt"
         writer = save_file.open("w")
         for l in self.target_labels:
             writer.write(f"{l}\n")
@@ -94,34 +116,40 @@ class Preprocessor():
         writer.close()
 
     def preprocessing(self):
+        """Run the full preprocessing pipeline."""
         self.data_loading()
         self.build_hierarchy()
         self.save()
 
 
 class EURLEX57KPreprocessor(Preprocessor):
+    """Preprocessor for EURLEX57K dataset."""
+
     def __init__(self, raw_dir, hie_file, save_dir) -> None:
         super().__init__(raw_dir, hie_file, save_dir)
         self.task = "EURLEX57K"
 
     def data_loading(self):
-        files = {k:list((Path(self.raw_dir)/k).iterdir()) for k in self.datasets.keys()}
+        """Load and tokenize EURLEX57K dataset."""
+        files = {k: list((Path(self.raw_dir) / k).iterdir()) for k in self.datasets.keys()}
         for split, fs in files.items():
             for f in tqdm(fs, desc=f"{self.task}-{split}"):
                 article = json.load(f.open())
                 did = article["celex_id"]
                 labels = article["concepts"]
-                text = " ".join([article["title"], article["header"], article["recitals"]," ".join(article["main_body"])])
+                text = " ".join([article["title"], article["header"], article["recitals"], " ".join(article["main_body"])])
                 token = self.tokenizing(text)
-                instance = {"did":did, "text":text, "labels":labels, "token":token}
+                instance = {"did": did, "text": text, "labels": labels, "token": token}
                 self.datasets[split].append(instance)
 
     def tokenizing(self, text):
+        """Tokenize and clean text."""
         text = cleaning(text)
         token = [word.lower() for word in text.split() if word not in english_stopwords and len(word) > 1]
         return token
 
     def build_hierarchy(self):
+        """Build label hierarchy from raw data."""
         label_cnt = Counter()
         for dataset in self.datasets.values():
             for instance in dataset:
@@ -130,11 +158,11 @@ class EURLEX57KPreprocessor(Preprocessor):
 
         print(f"Original EURLEX #Label : {len(hierarchy.keys())}")
         print(f"Target EURLEX57K #Label : {len(label_cnt)}")
-        print(f"Label Coverage : {len(label_cnt)/len(hierarchy.keys()):0.2f}")
+        print(f"Label Coverage : {len(label_cnt) / len(hierarchy.keys()):.2f}")
         self.target_labels = list(label_cnt.keys())
 
         self.id_label_map["-1"] = "nation_virtual"
-        self.parent_child_map["-1"]="root"
+        self.parent_child_map["-1"] = "root"
         for k, v in hierarchy.items():
             if k not in label_cnt:
                 continue
@@ -160,27 +188,28 @@ class EURLEX57KPreprocessor(Preprocessor):
                     self.id_label_map[parent] = tmp["label"]
 
 
-preprocessors = {"EURLEX57K":EURLEX57KPreprocessor}
+preprocessors = {"EURLEX57K": EURLEX57KPreprocessor}
 
-def main():
-    parser = ArgumentParser()
-    # general args
-    parser.add_argument("--name", type=str, default=None, required=True,
-                        help="Dataset name")
-    parser.add_argument("--raw_dir", type=str, default=None, required=True,
-                        help="Dataset name")
-    parser.add_argument("--hierarchy_file", type=str, default=None, required=True,
-                        help="Dataset name")
-    parser.add_argument("--save_dir", type=str, default=None, required=True,
-                        help="Dataset name")
-    
-    args = parser.parse_args()
 
-    preprocessor = preprocessors[args.name](args.raw_dir, args.hierarchy_file, args.save_dir)
+@hydra.main(version_base=None, config_path="../config", config_name="preprocessing")
+def main(config: DictConfig) -> None:
+    """Main preprocessing function with Hydra configuration.
 
+    Args:
+        config: Hydra configuration object (DictConfig)
+    """
+    print("=" * 80)
+    print("Preprocessing Configuration:")
+    print("=" * 80)
+    print(f"Dataset: {config.name}")
+    print(f"Raw Directory: {config.raw_dir}")
+    print(f"Hierarchy File: {config.hierarchy_file}")
+    print(f"Save Directory: {config.save_dir}")
+    print("=" * 80)
+
+    preprocessor = preprocessors[config.name](config.raw_dir, config.hierarchy_file, config.save_dir)
     preprocessor.preprocessing()
+
 
 if __name__ == "__main__":
     main()
-
-# python src/preprocessing.py --name=EURLEX57K --raw_dir=[raw_data_dir] --save_dir=[save_dir]  --hierarchy_file=[EURLEX57K.json_file path]

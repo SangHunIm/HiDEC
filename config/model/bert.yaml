@@ -1,0 +1,11 @@
+# BERT encoder model configuration
+
+model_hparams:
+  encoder_type: BERT
+  encoder_n_layers: 4
+  encoder_hidden_size: 300
+  label_embedding_size: 768
+  decoder_n_layers: 2
+  decoder_hidden_size: 768
+  decoder_ffn_size: 3072
+  learning_rate: 0.00005

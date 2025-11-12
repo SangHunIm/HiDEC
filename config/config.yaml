@@ -1,0 +1,65 @@
+# Base configuration for HiDEC
+# Use with: python src/train.py experiment=HiDEC_with_BERT
+
+defaults:
+  - model: bert
+  - experiment: ???  # Must specify experiment config
+  - _self_
+
+# Default paths
+path:
+  train: data/pregenerated/train.jsonl
+  dev: data/pregenerated/dev.jsonl
+  test: data/pregenerated/test.jsonl
+  hierachy_node: data/pregenerated/labels.txt
+  target_node: data/pregeneratedtarget_labels.txt
+  hierarchy_relation: data/pregenerated/parent_child_map.txt
+  vocab: data/pregenerated/vocab.txt
+  embedding: data/glove.6B.300d.txt
+  save: ./final_ckpt
+  dataset: EURLEX57K
+  hparam_summary: default
+
+# Default batch size
+batch_size: 32
+end_token_for_coarse_grained_labels: false
+
+# PyTorch Lightning Trainer defaults
+trainer_hparams:
+  max_epochs: 100
+  accumulate_grad_batches: 1
+  gradient_clip_val: 1.0
+  accelerator: gpu
+  strategy: ddp
+  devices: [0, 1]
+  num_sanity_val_steps: 0
+  check_val_every_n_epoch: 1
+
+# Model hyperparameters (will be overridden by model config)
+model_hparams:
+  vocab_size: 60002
+  text_embedding_size: 300
+  label_embedding_size: 300
+  encoder_type: BERT
+  encoder_n_layers: 1
+  encoder_hidden_size: 300
+  encoder_bidirectional: true
+  encoder_layer_norm: true
+  decoder_n_layers: 1
+  decoder_hidden_size: 300
+  decoder_ffn_size: 600
+  decoder_residual: false
+  dropout: 0.1
+  learning_rate: 0.0001
+  weight_decay: 0.1
+  warmup_proportion: 0.1
+  adam_epsilon: 1e-08
+  emb_scale: 1
+  padding_idx: 0
+
+# Hydra runtime configuration
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    chdir: false  # Don't change working directory

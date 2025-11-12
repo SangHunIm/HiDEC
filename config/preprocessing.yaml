@@ -1,0 +1,18 @@
+# Preprocessing configuration
+# Usage: python src/preprocessing.py name=EURLEX57K raw_dir=... save_dir=... hierarchy_file=...
+
+name: ???  # Required: Dataset name (e.g., EURLEX57K)
+raw_dir: ???  # Required: Path to raw dataset directory
+hierarchy_file: ???  # Required: Path to hierarchy structure file
+save_dir: ???  # Required: Output directory for preprocessed data
+
+# Example usage:
+# python src/preprocessing.py \
+#   name=EURLEX57K \
+#   raw_dir=data/EURLEX57K/raw \
+#   hierarchy_file=data/EURLEX57K/hierarchy.json \
+#   save_dir=data/pregenerated
+
+hydra:
+  job:
+    chdir: false  # Don't change working directory

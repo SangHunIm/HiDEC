@@ -1,26 +1,76 @@
-from utils.dataset import HiDECDataset, HiDECCollateFn
-from helper.configure import Configure
-from helper.vocab import Vocab
+"""
+HiDEC Testing/Evaluation Script with Hydra Configuration
+Usage:
+    python src/test.py experiment=HiDEC_with_BERT checkpoint_path=path/to/model.ckpt
+    python src/test.py experiment=HiDEC_with_GRU checkpoint_path=path/to/model.ckpt batch_size=256
+"""
 
+from omegaconf import DictConfig, OmegaConf
+import hydra
+
+from utils.dataset import HiDECDataset, HiDECCollateFn, HiDECBERTDataset, HiDECBERTCollateFn
+from helper.vocab import Vocab
 from torch.utils.data import DataLoader
 from modeling.model import HiDEC
 from pytorch_lightning import Trainer
 
-config = Configure(config_json_file="/home/ish/workspace/python_workspace/HiDEC/config/GRUEncoder_EURLEX57K.cfg")
 
-corpus_vocab = Vocab(config,
-                        min_freq=10,
-                        max_size=60000)
+@hydra.main(version_base=None, config_path="../config", config_name="config")
+def main(config: DictConfig) -> None:
+    """Main testing function with Hydra configuration.
 
-tm = corpus_vocab.v2i['token']
+    Args:
+        config: Hydra configuration object (DictConfig)
+    """
+    # Check if checkpoint path is provided
+    if not hasattr(config, 'checkpoint_path') or config.checkpoint_path is None:
+        raise ValueError(
+            "Checkpoint path is required for testing. "
+            "Please provide it via: python src/test.py experiment=... checkpoint_path=path/to/model.ckpt"
+        )
 
-dataset = HiDECDataset(config, corpus_vocab, "test")
-dataloader = DataLoader(dataset, 256, collate_fn=HiDECCollateFn)
+    print("=" * 80)
+    print("Testing Configuration:")
+    print("=" * 80)
+    print(OmegaConf.to_yaml(config))
+    print("=" * 80)
 
-ckpt = ".ckpt" #CKPT file path
+    # Build vocabulary
+    corpus_vocab = Vocab(config,
+                         min_freq=10,
+                         max_size=60000)
 
-model = HiDEC.load_from_checkpoint(ckpt, token_map=tm)
+    tm = corpus_vocab.v2i['token']
 
-trainer = Trainer(accelerator="gpu", strategy="ddp", devices=[0])
+    # Select dataset and collate function based on encoder type
+    if config.model_hparams.encoder_type == "BERT":
+        dataset = HiDECBERTDataset(config, corpus_vocab, "test")
+        collate_fn = HiDECBERTCollateFn
+    else:
+        dataset = HiDECDataset(config, corpus_vocab, "test")
+        collate_fn = HiDECCollateFn
 
-trainer.test(model=model, dataloaders=dataloader)
+    # Create dataloader with configurable batch size
+    test_batch_size = config.get('test_batch_size', config.batch_size)
+    dataloader = DataLoader(dataset, test_batch_size, collate_fn=collate_fn)
+
+    print(f"Loading model from checkpoint: {config.checkpoint_path}")
+    model = HiDEC.load_from_checkpoint(config.checkpoint_path, token_map=tm)
+
+    # Create trainer for testing
+    trainer_devices = config.trainer_hparams.get('devices', [0])
+    trainer = Trainer(
+        accelerator="gpu",
+        strategy="ddp" if len(trainer_devices) > 1 else "auto",
+        devices=trainer_devices
+    )
+
+    # Run testing
+    print("=" * 80)
+    print("Running evaluation...")
+    print("=" * 80)
+    trainer.test(model=model, dataloaders=dataloader)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,11 @@
+# GRU encoder model configuration
+
+model_hparams:
+  encoder_type: GRUOrig
+  encoder_n_layers: 1
+  encoder_hidden_size: 300
+  label_embedding_size: 300
+  decoder_n_layers: 1
+  decoder_hidden_size: 300
+  decoder_ffn_size: 600
+  learning_rate: 0.0001
